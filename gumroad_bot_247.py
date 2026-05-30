@@ -147,14 +147,16 @@ def create_offer_code(product_id: str, name: str, amount_cents: int, code: str =
 
 
 # ---------------------------------------------------------------------------
-# OpenAI
+# AI Provider
 # ---------------------------------------------------------------------------
-if USE_GROQ and GROQ_API_KEY:
-    client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
-    AI_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-else:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    AI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+AI_PROVIDER = "groq" if (USE_GROQ and GROQ_API_KEY) else "openai"
+AI_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if AI_PROVIDER == "groq" else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+
+def get_client():
+    if AI_PROVIDER == "groq":
+        return OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+    return OpenAI(api_key=OPENAI_API_KEY)
 
 
 def ai_analizo(products: list[dict], sales: list[dict]) -> dict:
@@ -190,6 +192,7 @@ Kthe një JSON të vlefshëm pa tekst tjetër:
 }}
 """
     try:
+        client = get_client()
         resp = client.chat.completions.create(
             model=AI_MODEL,
             messages=[
@@ -366,24 +369,23 @@ def main():
     log.info("=" * 50)
     log.info("GUMROAD AI BOT 24/7 — NISJE")
     log.info("Data: %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    ai_provider = "Groq (Falas)" if USE_GROQ else "OpenAI"
+    ai_provider_display = "Groq (Falas)" if AI_PROVIDER == "groq" else "OpenAI"
     log.info("DRY_RUN: %s", DRY_RUN)
-    log.info("AI Provider: %s (%s)", ai_provider, AI_MODEL)
+    log.info("AI Provider: %s (%s)", ai_provider_display, AI_MODEL)
     log.info("Min cmim: $%.2f | Zbritje max: %.0f%%", MIN_PRICE_USD, MAX_DISCOUNT_PERCENT)
     log.info("=" * 50)
 
     notify(
         f"Gumroad AI Bot 24/7 u nis!\n"
         f"DRY_RUN: {DRY_RUN}\n"
-        f"AI: {ai_provider} ({AI_MODEL})\n"
+        f"AI: {ai_provider_display} ({AI_MODEL})\n"
         f"Ciklet: {SCHEDULE_TIMES}\n"
         f"Min cmim: ${MIN_PRICE_USD:.2f} | Max zbritje: {MAX_DISCOUNT_PERCENT:.0f}%"
     )
 
-    if USE_GROQ:
-        if not GROQ_API_KEY:
-            notify_error("GROQ_API_KEY mungon.")
-    elif not OPENAI_API_KEY.startswith("sk-"):
+    if AI_PROVIDER == "groq" and not GROQ_API_KEY:
+        notify_error("GROQ_API_KEY mungon.")
+    elif AI_PROVIDER == "openai" and not OPENAI_API_KEY.startswith("sk-"):
         notify_error("OPENAI_API_KEY nuk duket e vlefshme.")
     if not GUMROAD_ACCESS_TOKEN:
         notify_error("GUMROAD_ACCESS_TOKEN mungon.")
